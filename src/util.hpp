@@ -44,14 +44,6 @@ constexpr inline Int cdiv(Int a, int b) { return (a + b - 1) / b; }
 // compilers.
 typedef __uint128_t uint128_t;
 
-// Allows printing of uint128_t
-std::ostream &operator<<(std::ostream &strm, uint128_t const &v)
-{
-    strm << "uint128(" << (uint64_t)(v >> 64) << "," << (uint64_t)(v & (((uint128_t)1 << 64) - 1))
-         << ")";
-    return strm;
-}
-
 #endif
 
 // compiler-specific byte swap macros.
@@ -341,24 +333,9 @@ namespace Util {
     }
 
 #if defined(_WIN32) || defined(__x86_64__)
-    void CpuID(uint32_t leaf, uint32_t *regs)
-    {
-#if defined(_WIN32)
-        __cpuid((int *)regs, (int)leaf);
-#else
-        __get_cpuid(leaf, &regs[0], &regs[1], &regs[2], &regs[3]);
-#endif /* defined(_WIN32) */
-    }
+    void CpuID(uint32_t leaf, uint32_t *regs);
 
-    bool HavePopcnt(void)
-    {
-        // EAX, EBX, ECX, EDX
-        uint32_t regs[4] = {0};
-
-        CpuID(1, regs);
-        // Bit 23 of ECX indicates POPCNT instruction support
-        return (regs[2] >> 23) & 1;
-    }
+    bool HavePopcnt(void);
 #endif /* defined(_WIN32) || defined(__x86_64__) */
 
     inline uint64_t PopCount(uint64_t n)
