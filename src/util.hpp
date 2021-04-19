@@ -43,6 +43,7 @@ constexpr inline Int cdiv(Int a, int b) { return (a + b - 1) / b; }
 // __uint__128_t is only available in 64 bit architectures and on certain
 // compilers.
 typedef __uint128_t uint128_t;
+std::ostream &operator<<(std::ostream &strm, uint128_t const &v);
 
 #endif
 
@@ -334,9 +335,8 @@ namespace Util {
 
 #if defined(_WIN32) || defined(__x86_64__)
     void CpuID(uint32_t leaf, uint32_t *regs);
-
-    bool HavePopcnt(void);
 #endif /* defined(_WIN32) || defined(__x86_64__) */
+    bool HavePopcnt(void);
 
     inline uint64_t PopCount(uint64_t n)
     {

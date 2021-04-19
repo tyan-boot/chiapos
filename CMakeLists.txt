@@ -135,12 +135,19 @@ pybind11_add_module(chiapos ${CMAKE_CURRENT_SOURCE_DIR}/python-bindings/chiapos.
 add_library(chiapos-ffi src/prover_disk.cpp src/bits.cpp src/util.cpp src/chacha8.c ${BLAKE3_SRC})
 
 add_executable(ProofOfSpace
+    src/prover_disk.cpp
+    src/bits.cpp
+    src/util.cpp
+
     src/cli.cpp
     src/chacha8.c
     ${BLAKE3_SRC}
 )
 
 add_executable(RunTests
+    src/prover_disk.cpp
+    src/bits.cpp
+    src/util.cpp
     tests/test-main.cpp
     tests/test.cpp
     src/chacha8.c

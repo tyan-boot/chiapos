@@ -53,9 +53,9 @@ const uint16_t kBC = kB * kC;
 // compute f5.
 static const uint8_t kVectorLens[] = {0, 0, 1, 2, 4, 4, 3, 2};
 
-uint16_t L_targets[2][kBC][kExtraBitsPow];
-bool initialized = false;
-void load_tables()
+inline uint16_t L_targets[2][kBC][kExtraBitsPow];
+inline bool initialized = false;
+inline void load_tables()
 {
     for (uint8_t parity = 0; parity < 2; parity++) {
         for (uint16_t i = 0; i < kBC; i++) {
