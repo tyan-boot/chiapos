@@ -130,11 +130,16 @@ private:
         uint32_t stubs_size_bits = EntrySizes::CalculateStubsSize(k) * 8;
         uint32_t max_deltas_size = EntrySizes::CalculateMaxDeltasSize(k, table_index);
 
-        SafeSeek(disk_file, table_begin_pointers[table_index] + (park_size_bits / 8) * park_index);
+        auto *f = fopen(filename.c_str(), "r");
+        auto fd = fileno(f);
+
+//        SafeSeek(disk_file, table_begin_pointers[table_index] + (park_size_bits / 8) * park_index);
 
         auto buffer_size = 0 + line_point_size + stubs_size_bits / 8 + sizeof(uint16_t) + max_deltas_size;
         auto buffer = std::make_unique<uint8_t[]>(buffer_size);
-        SafeRead(disk_file, buffer.get(), buffer_size);
+        pread64(fd, buffer.get(), buffer_size, table_begin_pointers[table_index] + (park_size_bits / 8) * park_index);
+
+//        SafeRead(disk_file, buffer.get(), buffer_size);
         auto *ptr = buffer.get();
 
         // This is the checkpoint at the beginning of the park
