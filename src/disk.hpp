@@ -48,6 +48,10 @@ struct Disk {
 };
 
 #if ENABLE_LOGGING
+// logging is currently unix / bsd only: use <fstream> or update
+// calls to ::open and ::write to port to windows
+#include <fcntl.h>
+#include <unistd.h>
 #include <mutex>
 #include <unordered_map>
 #include <cinttypes>
@@ -169,9 +173,14 @@ struct FileDisk {
             readPos = begin + amtread;
             if (amtread != length) {
                 std::cout << "Only read " << amtread << " of " << length << " bytes at offset "
-                          << begin << " from " << filename_ << "with length " << writeMax
+                          << begin << " from " << filename_ << " with length " << writeMax
                           << ". Error " << ferror(f_) << ". Retrying in five minutes." << std::endl;
+                // Close, Reopen, and re-seek the file to recover in case the filesystem
+                // has been remounted.
+                Close();
+                bReading = false;
                 std::this_thread::sleep_for(5min);
+                Open(retryOpenFlag);
             }
         } while (amtread != length);
     }
@@ -202,9 +211,14 @@ struct FileDisk {
                 writeMax = writePos;
             if (amtwritten != length) {
                 std::cout << "Only wrote " << amtwritten << " of " << length << " bytes at offset "
-                          << begin << " to " << filename_ << "with length " << writeMax
+                          << begin << " to " << filename_ << " with length " << writeMax
                           << ". Error " << ferror(f_) << ". Retrying in five minutes." << std::endl;
+                // Close, Reopen, and re-seek the file to recover in case the filesystem
+                // has been remounted.
+                Close();
+                bReading = false;
                 std::this_thread::sleep_for(5min);
+                Open(writeFlag | retryOpenFlag);
             }
         } while (amtwritten != length);
     }
