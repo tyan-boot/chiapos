@@ -27,6 +27,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <deque>
+#include <future>
 
 #include "../lib/include/picosha2.hpp"
 #include "calculate_bucket.hpp"
@@ -270,17 +272,21 @@ private:
             c1_index -= kCheckpoint2Interval;
         }
 
-        uint32_t c1_entry_size = Util::ByteAlign(k) / 8;
+        uint32_t c1_entry_size = Util::ByteAlign(k) / 8;  // 4 bytes
 
         auto* c1_entry_bytes = new uint8_t[c1_entry_size];
+        std::unique_ptr<uint8_t []> c1_buffer = std::make_unique<uint8_t[]>(kCheckpoint1Interval * c1_entry_size);
+
         SafeSeek(disk_file, table_begin_pointers[8] + c1_index * Util::ByteAlign(k) / 8);
+        SafeRead(disk_file, c1_buffer.get(), kCheckpoint1Interval * c1_entry_size);
 
         uint64_t curr_f7 = c2_entry_f;
         uint64_t prev_f7 = c2_entry_f;
         broke = false;
         // Goes through C2 entries until we find the correct C1 checkpoint.
         for (uint64_t start = 0; start < kCheckpoint1Interval; start++) {
-            SafeRead(disk_file, c1_entry_bytes, c1_entry_size);
+//            SafeRead(disk_file, c1_entry_bytes, c1_entry_size);
+            memcpy(c1_entry_bytes, c1_buffer.get() + start * c1_entry_size, c1_entry_size);
             Bits c1_entry = Bits(c1_entry_bytes, Util::ByteAlign(k) / 8, Util::ByteAlign(k));
             uint64_t read_f7 = c1_entry.Slice(0, k).GetValue();
 
@@ -329,16 +335,30 @@ private:
 
             SafeSeek(disk_file, table_begin_pointers[10] + c1_index * c3_entry_size);
 
-            SafeRead(disk_file, encoded_size_buf, 2);
+            auto buffer_size = 2 + c3_entry_size - 2 + 2 + c3_entry_size - 2;
+            auto buffer = std::make_unique<uint8_t[]>(buffer_size);
+            SafeRead(disk_file, buffer.get(), buffer_size);
+
+            auto *ptr = buffer.get();
+
+            memcpy(encoded_size_buf, ptr, 2);
+            ptr += 2;
+//            SafeRead(disk_file, encoded_size_buf, 2);
             encoded_size = Bits(encoded_size_buf, 2, 16).GetValue();
-            SafeRead(disk_file, bit_mask, c3_entry_size - 2);
+
+            memcpy(bit_mask, ptr, c3_entry_size - 2);
+            ptr += c3_entry_size - 2;
+//            SafeRead(disk_file, bit_mask, c3_entry_size - 2);
 
             p7_positions =
                 GetP7Positions(curr_f7, f7, curr_p7_pos, bit_mask, encoded_size, c1_index);
 
-            SafeRead(disk_file, encoded_size_buf, 2);
+            memcpy(encoded_size_buf, ptr, 2);
+            ptr += 2;
+//            SafeRead(disk_file, encoded_size_buf, 2);
             encoded_size = Bits(encoded_size_buf, 2, 16).GetValue();
-            SafeRead(disk_file, bit_mask, c3_entry_size - 2);
+            memcpy(bit_mask, ptr, c3_entry_size - 2);
+//            SafeRead(disk_file, bit_mask, c3_entry_size - 2);
 
             c1_index++;
             curr_p7_pos = c1_index * kCheckpoint1Interval;
@@ -349,9 +369,17 @@ private:
 
         } else {
             SafeSeek(disk_file, table_begin_pointers[10] + c1_index * c3_entry_size);
-            SafeRead(disk_file, encoded_size_buf, 2);
+            auto buffer_size = 2 + c3_entry_size - 2;
+            auto buffer = std::make_unique<uint8_t[]>(buffer_size);
+            SafeRead(disk_file, buffer.get(), buffer_size);
+            auto *ptr = buffer.get();
+
+            memcpy(encoded_size_buf, ptr, 2);
+            ptr += 2;
+//            SafeRead(disk_file, encoded_size_buf, 2);
             encoded_size = Bits(encoded_size_buf, 2, 16).GetValue();
-            SafeRead(disk_file, bit_mask, c3_entry_size - 2);
+            memcpy(bit_mask, ptr, c3_entry_size - 2);
+//            SafeRead(disk_file, bit_mask, c3_entry_size - 2);
 
             p7_positions =
                 GetP7Positions(curr_f7, f7, curr_p7_pos, bit_mask, encoded_size, c1_index);
@@ -375,13 +403,33 @@ private:
         uint64_t park_index = (p7_positions[0] == 0 ? 0 : p7_positions[0]) / kEntriesPerPark;
         SafeSeek(disk_file, table_begin_pointers[7] + park_index * p7_park_size_bytes);
         SafeRead(disk_file, p7_park_buf, p7_park_size_bytes);
+
         ParkBits p7_park = ParkBits(p7_park_buf, p7_park_size_bytes, p7_park_size_bytes * 8);
+
+        std::deque<std::future<ParkBits>> p7_park_futs{};
         for (uint64_t i = 0; i < p7_positions[p7_positions.size() - 1] - p7_positions[0] + 1; i++) {
             uint64_t new_park_index = (p7_positions[i]) / kEntriesPerPark;
+
             if (new_park_index > park_index) {
-                SafeSeek(disk_file, table_begin_pointers[7] + new_park_index * p7_park_size_bytes);
-                SafeRead(disk_file, p7_park_buf, p7_park_size_bytes);
-                p7_park = ParkBits(p7_park_buf, p7_park_size_bytes, p7_park_size_bytes * 8);
+                auto f = std::async(std::launch::async, [this, p7_park_size_bytes, new_park_index]() {
+                    auto *f = fopen(filename.c_str(), "r");
+                    auto fd = fileno(f);
+                    auto p7_buffer = std::make_unique<uint8_t[]>(p7_park_size_bytes);
+                    pread64(fd, p7_buffer.get(), p7_park_size_bytes, table_begin_pointers[7] + new_park_index * p7_park_size_bytes);
+
+                    return ParkBits (p7_buffer.get(), p7_park_size_bytes, p7_park_size_bytes * 8);
+                });
+
+                p7_park_futs.emplace_back(std::move(f));
+            }
+        }
+
+        for (uint64_t i = 0; i < p7_positions[p7_positions.size() - 1] - p7_positions[0] + 1; i++) {
+            uint64_t new_park_index = (p7_positions[i]) / kEntriesPerPark;
+
+            if (new_park_index > park_index) {
+                p7_park = p7_park_futs.front().get();
+                p7_park_futs.pop_front();
             }
             uint32_t start_bit_index = (p7_positions[i] % kEntriesPerPark) * (k + 1);
 
