@@ -126,18 +126,29 @@ private:
         uint64_t park_index = position / kEntriesPerPark;
         uint32_t park_size_bits = EntrySizes::CalculateParkSize(k, table_index) * 8;
 
+        uint16_t line_point_size = EntrySizes::CalculateLinePointSize(k);
+        uint32_t stubs_size_bits = EntrySizes::CalculateStubsSize(k) * 8;
+        uint32_t max_deltas_size = EntrySizes::CalculateMaxDeltasSize(k, table_index);
+
         SafeSeek(disk_file, table_begin_pointers[table_index] + (park_size_bits / 8) * park_index);
 
+        auto buffer_size = 0 + line_point_size + stubs_size_bits / 8 + sizeof(uint16_t) + max_deltas_size;
+        auto buffer = std::make_unique<uint8_t[]>(buffer_size);
+        SafeRead(disk_file, buffer.get(), buffer_size);
+        auto *ptr = buffer.get();
+
         // This is the checkpoint at the beginning of the park
-        uint16_t line_point_size = EntrySizes::CalculateLinePointSize(k);
         auto* line_point_bin = new uint8_t[line_point_size + 7];
-        SafeRead(disk_file, line_point_bin, line_point_size);
+        memcpy(line_point_bin, ptr, line_point_size);
+        ptr += line_point_size;
+//        SafeRead(disk_file, line_point_bin, line_point_size);
         uint128_t line_point = Util::SliceInt128FromBytes(line_point_bin, 0, k * 2);
 
         // Reads EPP stubs
-        uint32_t stubs_size_bits = EntrySizes::CalculateStubsSize(k) * 8;
         auto* stubs_bin = new uint8_t[stubs_size_bits / 8 + 7];
-        SafeRead(disk_file, stubs_bin, stubs_size_bits / 8);
+        memcpy(stubs_bin, ptr, stubs_size_bits / 8);
+        ptr += stubs_size_bits / 8;
+//        SafeRead(disk_file, stubs_bin, stubs_size_bits / 8);
 
         // Reads EPP deltas
         uint32_t max_deltas_size_bits = EntrySizes::CalculateMaxDeltasSize(k, table_index) * 8;
@@ -145,7 +156,9 @@ private:
 
         // Reads the size of the encoded deltas object
         uint16_t encoded_deltas_size = 0;
-        SafeRead(disk_file, (uint8_t*)&encoded_deltas_size, sizeof(uint16_t));
+        memcpy((uint8_t*)&encoded_deltas_size, ptr, sizeof (uint16_t));
+        ptr += sizeof (uint16_t);
+//        SafeRead(disk_file, (uint8_t*)&encoded_deltas_size, sizeof(uint16_t));
 
         if (encoded_deltas_size * 8 > max_deltas_size_bits) {
             throw std::invalid_argument("Invalid size for deltas: " + std::to_string(encoded_deltas_size));
@@ -157,10 +170,12 @@ private:
             // Uncompressed
             encoded_deltas_size &= 0x7fff;
             deltas.resize(encoded_deltas_size);
-            SafeRead(disk_file, deltas.data(), encoded_deltas_size);
+            memcpy(deltas.data(), ptr, encoded_deltas_size);
+//            SafeRead(disk_file, deltas.data(), encoded_deltas_size);
         } else {
             // Compressed
-            SafeRead(disk_file, deltas_bin, encoded_deltas_size);
+            memcpy(deltas_bin, ptr, encoded_deltas_size);
+//            SafeRead(disk_file, deltas_bin, encoded_deltas_size);
 
             // Decodes the deltas
             double R = kRValues[table_index - 1];
