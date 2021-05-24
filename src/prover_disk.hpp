@@ -431,6 +431,7 @@ private:
                     auto fd = fileno(f);
                     auto p7_buffer = std::make_unique<uint8_t[]>(p7_park_size_bytes);
                     pread64(fd, p7_buffer.get(), p7_park_size_bytes, table_begin_pointers[7] + new_park_index * p7_park_size_bytes);
+                    fclose(f);
 
                     return ParkBits (p7_buffer.get(), p7_park_size_bytes, p7_park_size_bytes * 8);
                 });
