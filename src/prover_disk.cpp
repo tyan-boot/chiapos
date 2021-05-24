@@ -66,6 +66,9 @@ DiskProver::DiskProver(const std::string& filename)
         this->C2.push_back(Bits(c2_buf, c2_size, c2_size * 8).Slice(0, k).GetValue());
     }
 
+    this->file = fopen(filename.c_str(), "r");
+    this->fd = fileno(this->file);
+
     delete[] c2_buf;
 }
 
@@ -77,6 +80,8 @@ DiskProver::~DiskProver()
         Encoding::ANSFree(kRValues[i]);
     }
     Encoding::ANSFree(kC3R);
+
+    fclose(this->file);
 }
 
 void DiskProver::GetId(uint8_t* buffer) { memcpy(buffer, id, kIdLen); }

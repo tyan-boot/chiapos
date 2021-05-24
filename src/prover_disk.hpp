@@ -85,6 +85,9 @@ private:
     std::vector<uint64_t> table_begin_pointers;
     std::vector<uint64_t> C2;
 
+    FILE *file;
+    int fd;
+
     // Using this method instead of simply seeking will prevent segfaults that would arise when
     // continuing the process of looking up qualities.
     static void SafeSeek(std::ifstream& disk_file, uint64_t seek_location) {
@@ -129,9 +132,6 @@ private:
         uint16_t line_point_size = EntrySizes::CalculateLinePointSize(k);
         uint32_t stubs_size_bits = EntrySizes::CalculateStubsSize(k) * 8;
         uint32_t max_deltas_size = EntrySizes::CalculateMaxDeltasSize(k, table_index);
-
-        auto *f = fopen(filename.c_str(), "r");
-        auto fd = fileno(f);
 
 //        SafeSeek(disk_file, table_begin_pointers[table_index] + (park_size_bits / 8) * park_index);
 
@@ -432,11 +432,8 @@ private:
 
             if (new_park_index > park_index) {
                 auto f = std::async(std::launch::async, [this, p7_park_size_bytes, new_park_index]() {
-                    auto *f = fopen(filename.c_str(), "r");
-                    auto fd = fileno(f);
                     auto p7_buffer = std::make_unique<uint8_t[]>(p7_park_size_bytes);
                     pread64(fd, p7_buffer.get(), p7_park_size_bytes, table_begin_pointers[7] + new_park_index * p7_park_size_bytes);
-                    fclose(f);
 
                     return ParkBits (p7_buffer.get(), p7_park_size_bytes, p7_park_size_bytes * 8);
                 });
