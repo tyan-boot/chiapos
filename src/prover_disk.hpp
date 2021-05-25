@@ -70,10 +70,14 @@ public:
     // values, which are in different parts of the disk.
     std::vector<LargeBits> GetQualitiesForChallenge(const uint8_t* challenge);
 
+    std::pair< std::vector<LargeBits>, std::vector<uint64_t >> GetQualitiesAndEntriesForChallenge(const uint8_t* challenge);
+
     // Given a challenge, and an index, returns a proof of space. This assumes GetQualities was
     // called, and there are actually proofs present. The index represents which proof to fetch,
     // if there are multiple.
     LargeBits GetFullProof(const uint8_t* challenge, uint32_t index);
+
+    LargeBits GetFullProof(uint32_t index, const std::vector<uint64_t>& p7_entries);
 
 private:
     mutable std::mutex _mtx;
@@ -553,8 +557,16 @@ private:
             ret.emplace_back(xy.first, k);   // x
             return ret;
         } else {
-            std::vector<Bits> left = GetInputs(disk_file, xy.second, depth - 1);  // y
-            std::vector<Bits> right = GetInputs(disk_file, xy.first, depth - 1);  // x
+            auto left_fut = std::async(std::launch::async, [this, &disk_file, &xy, depth]() {
+                return GetInputs(disk_file, xy.second, depth - 1);
+            });
+
+            auto right_fut = std::async(std::launch::async, [this, &disk_file, &xy, depth]() {
+                return GetInputs(disk_file, xy.first, depth - 1);
+            });
+
+            std::vector<Bits> left = left_fut.get();  // y
+            std::vector<Bits> right = right_fut.get();  // x
             left.insert(left.end(), right.begin(), right.end());
             return left;
         }
