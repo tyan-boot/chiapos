@@ -67,6 +67,10 @@ DiskProver::DiskProver(const std::string& filename)
     }
 
     this->file = fopen(filename.c_str(), "r");
+    if (this->file == nullptr) {
+        throw std::invalid_argument("open file " + filename + " failed, error " + std::to_string(errno));
+    }
+
     this->fd = fileno(this->file);
 
     delete[] c2_buf;

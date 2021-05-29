@@ -141,7 +141,11 @@ private:
 
         auto buffer_size = 0 + line_point_size + stubs_size_bits / 8 + sizeof(uint16_t) + max_deltas_size;
         auto buffer = std::make_unique<uint8_t[]>(buffer_size);
-        pread64(fd, buffer.get(), buffer_size, table_begin_pointers[table_index] + (park_size_bits / 8) * park_index);
+        auto r = pread64(fd, buffer.get(), buffer_size, table_begin_pointers[table_index] + (park_size_bits / 8) * park_index);
+
+        if (r != buffer_size) {
+            throw std::invalid_argument("read buffer failed " + std::to_string(errno));
+        }
 
 //        SafeRead(disk_file, buffer.get(), buffer_size);
         auto *ptr = buffer.get();
@@ -437,7 +441,11 @@ private:
             if (new_park_index > park_index) {
                 auto f = std::async(std::launch::async, [this, p7_park_size_bytes, new_park_index]() {
                     auto p7_buffer = std::make_unique<uint8_t[]>(p7_park_size_bytes);
-                    pread64(fd, p7_buffer.get(), p7_park_size_bytes, table_begin_pointers[7] + new_park_index * p7_park_size_bytes);
+                    auto r = pread64(fd, p7_buffer.get(), p7_park_size_bytes, table_begin_pointers[7] + new_park_index * p7_park_size_bytes);
+
+                    if (r != p7_park_size_bytes) {
+                        throw std::invalid_argument("read new parks " + std::to_string(errno));
+                    }
 
                     return ParkBits (p7_buffer.get(), p7_park_size_bytes, p7_park_size_bytes * 8);
                 });
